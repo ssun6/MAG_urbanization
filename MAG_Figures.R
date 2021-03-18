@@ -761,3 +761,117 @@ dev.off()
 pdf(paste0("/Users/shansun/Google\ Drive/MAG_manu/c2_order_fisher_odd_",i,"_multiple.pdf"),width=8,height=3)
 pheatmap(order_odd_sig_sim[c(5,7,8,10,11,13),],col=c("blue","red","white"),breaks=c(0,1,50,100),border=F,cluster_col = F,cluster_row = F,fontsize=10,legend_breaks=c(-0.1,-0.05,0,0.05,0.1))
 dev.off()
+
+#ARGS
+lines_dat <- readLines(con = '/Users/shansun/Google\ Drive/China/wgs/bins/arg/args_align.txt')
+arg_abd=matrix(nrow=length(lines_dat ),ncol=6)
+n=0
+m=0
+for (i in 1:length(lines_dat )){
+  if (grepl("gb",lines_dat[i])){
+    n=n+1
+    arg_abd[n,1]=strsplit(lines_dat[i],".fa_arg_align.txt")[[1]][1]
+    arg_abd[n,2]=strsplit(lines_dat[i],":> ")[[1]][2]
+    m=1
+  }
+  if (all(grepl("txt-",lines_dat[i]),m==1,!grepl("txt-Length",lines_dat[i]))){
+    a=strsplit(lines_dat[i],"txt-")[[1]][2]
+    if (!is.na(a)){
+      arg_abd[n,2]=paste0(arg_abd[n,2],a)
+    }
+  }
+  if (lines_dat[i]=="--"){
+    m=0
+  }
+  if (grepl("Identities",lines_dat[i])){
+    if (is.na(arg_abd[n,3])){
+      arg_abd[n,3]=strsplit(strsplit(lines_dat[i],"\\(")[[1]][2],"%\\)")[[1]][1]
+      arg_abd[n,5]=strsplit(strsplit(lines_dat[i],"\\/")[[1]][2]," \\(")[[1]][1]
+    }else{
+      arg_abd[n,4]=strsplit(strsplit(lines_dat[i],"\\(")[[1]][2],"%\\)")[[1]][1]
+      arg_abd[n,6]=strsplit(strsplit(lines_dat[i],"\\/")[[1]][2]," \\(")[[1]][1]
+    }
+  }
+}
+arg_abd=data.frame(arg_abd[apply(arg_abd,1,function(i){any(!is.na(i))}),])
+arg_abd$access=sapply(strsplit(as.character(arg_abd[,2]),"\\|"),"[[",5)
+arg_abd=arg_abd[!duplicated(arg_abd[,c(1,5)]),]
+arg_abd$high_quality=bins_info2$high_quality[match(arg_abd[,1],bins_info2$BinID)]
+arg_abd$tax=bins_info2$classification[match(arg_abd[,1],bins_info2$BinID)]
+arg_abd$c2=bins_info2$c2[match(arg_abd[,1],bins_info2$BinID)]
+
+arg_abd1=arg_abd[as.numeric(as.character(arg_abd[,3]))>95&as.numeric(as.character(arg_abd[,5]))>100&arg_abd$high_quality==1,]
+arg_abd1=arg_abd1[order(arg_abd1[,1]),]
+arg_abd1$DNA=sapply(strsplit(as.character(arg_abd1[,2]),"\\|"),"[[",2)
+arg_abd1$gene=sapply(strsplit(as.character(arg_abd1[,2]),"\\|"),"[[",6)
+
+bins_info2$arg=rep(0,nrow(bins_info2))
+bins_info2$argb=rep(0,nrow(bins_info2))
+
+bins_info2$arg[match(names(sort(table(droplevels(arg_abd1[,1])))),bins_info2[,1])]=as.numeric(sort(table(droplevels(arg_abd1[,1]))))
+bins_info2$argb[match(names(sort(table(droplevels(arg_abd1[,1])))),bins_info2[,1])]=1
+table(paste(bins_info2$c2,bins_info2$argb))
+fisher.test(matrix(table(paste(bins_info2$c2,bins_info2$argb)[bins_info2$high_quality==1]),ncol=2))
+
+
+arg_cat=read.table(file="/Users/shansun/Google\ Drive/MAG_manu/card_data/aro_categories_index.tsv",sep="\t",quote="",header=T)
+arg_abd1$antn=arg_cat[match(arg_abd1$DNA,arg_cat[,2]),4]
+sort(table(arg_abd1$gene))
+
+write.csv(arg_abd1,file= '/Users/shansun/Google\ Drive/args_bins_new.csv')
+write.csv(arg_abd1,file= '/Users/shansun/Google\ Drive/China/wgs/bins/arg/args_bins.csv')
+write.csv(arg_abd1,file= "/Users/Shansun/Google\ Drive/MAG_manu/args_bins.csv")
+
+aqw <- dcast(arg_abd1, gene~tax, length)
+rownames(aqw)=aqw[,1]
+aqw=aqw[,-1]
+sort(apply(aqw[,-1],1,sum))
+sort(apply(aqw[,-1],2,sum))
+
+aqw1 <- dcast(arg_abd1[arg_abd1$c2==1,], gene~tax, length)
+rownames(aqw1)=aqw1[,1]
+aqw1=aqw1[,-1]
+sort(apply(aqw1[,-1],1,sum))
+a=data.frame(as.matrix(apply(aqw0[,-1],1,sum)))
+
+aqw0 <- dcast(arg_abd1[arg_abd1$c2==0,], gene~tax, length)
+rownames(aqw0)=aqw0[,1]
+aqw0=aqw0[,-1]
+sort(apply(aqw0[,-1],1,sum))
+b=data.frame(as.matrix(apply(aqw1[,-1],1,sum)))
+
+c=merge(a, b, by = "row.names",all=T)
+c[is.na(c)]=0
+c=c[order(c[,3],decreasing = T),]
+
+
+arg_list=merge(data.frame(table(droplevels(bins_info2$classification[bins_info2$argb==1&bins_info2$c2==1]))),data.frame(table(droplevels(bins_info2$classification[bins_info2$argb==1&bins_info2$c2==0]))),by="Var1",all=T)
+arg_list=arg_list[order(arg_list[,2],decreasing = T),]
+arg_list[is.na(arg_list)]=0
+
+tax_size1=data.frame(table(droplevels(bins_info2$classification[bins_info2$high_quality==1&bins_info2$c2==1])))
+tax_size0=data.frame(table(droplevels(bins_info2$classification[bins_info2$high_quality==1&bins_info2$c2==0])))
+
+arg_list$size1=tax_size1[match(arg_list[,1],tax_size1[,1]),2]
+arg_list$size0=tax_size0[match(arg_list[,1],tax_size0[,1]),2]
+arg_list[is.na(arg_list)]=0
+
+wilcox.test(bins_info2$arg~bins_info2$c2)
+wilcox.test(bins_info2$arg~bins_info2$novel)
+
+table(paste0(bins_info2$c2,bins_info2$argb))
+fisher.test(matrix(table(paste0(bins_info2$c2,bins_info2$argb)),nrow=2))
+fisher.test(matrix(table(paste0(bins_info2$c2,bins_info2$argb)[bins_info2$high_quality==1]),nrow=2))
+
+fisher.test(matrix(table(paste0(bins_info2$high_quality,bins_info2$argb)),nrow=2))
+
+arg_p=vector()
+i=1
+for(n in names(sort(table(arg_abd$access),decreasing = T))[1:56]){
+  bin_arg=unique(arg_abd[,1][grep(n,arg_abd$access)])
+  bins_info2$arg_n=rep(0,nrow(bins_info2))
+  bins_info2$arg_n[bins_info2[,1]%in%bin_arg]=1
+  table(paste0(bins_info2$c2,bins_info2$arg_n))
+  arg_p[i]=fisher.test(matrix(as.numeric(table(paste0(bins_info2$c2,bins_info2$arg_n))),nrow=2))$p.value
+  i=i+1
+}
